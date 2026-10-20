@@ -1,0 +1,20 @@
+{
+  "PySide6_Essentials": {
+    "url": "https://files.pythonhosted.org/packages/03/61/9a7e32a37b224f68506785bfb0f288d516098ec71681782d72b695a6c95d/pyside6_essentials-6.12.0-cp310-abi3-win_amd64.whl",
+    "size": 82153795,
+    "sha256": "c9a95102aa23c1f86516a30d5a9be37552d324eee7e567eb7508973f1218cb42",
+    "filename": "pyside6_essentials-6.12.0-cp310-abi3-win_amd64.whl"
+  },
+  "shiboken6": {
+    "url": "https://files.pythonhosted.org/packages/2a/b6/bee97e7a2edeab72aafabb46ee5adc939790a638d107860b4cad7a20e407/shiboken6-6.12.0-cp310-abi3-win_amd64.whl",
+    "size": 1265476,
+    "sha256": "a1906cb8116869178c64b6bab52623bbc8b4ceed7b30bfc3c9aa0f6e67f6438e",
+    "filename": "shiboken6-6.12.0-cp310-abi3-win_amd64.whl"
+  },
+  "python": {
+    "url": "https://www.python.org/ftp/python/3.14.8/python-3.14.8-embed-amd64.zip",
+    "size": 12601679,
+    "sha256": "a93abe456ab01bd96d7a085b3cdb6566b3063f4241360d114142fbdb07f0a310",
+    "filename": "python-3.14.8-embed-amd64.zip"
+  }
+}

@@ -1,0 +1,13 @@
+# User data and downloaded assets
+settings.json
+projects/*
+!projects/.gitkeep
+runtime/
+*.crylocal.json
+*.csv
+*.pak
+*.gguf
+*.part
+__pycache__/
+*.py[cod]
+*.log
