@@ -456,7 +456,7 @@ def build(project, output, font_pak=None, progress=None):
     output.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix='.' + output.name + '-', dir=output.parent)
     os.close(fd)
-    fonts, font_source = {}, None
+    fonts, font_source, replaced_fonts = {}, None, []
     try:
         if font_pak:
             font_source = Path(font_pak).resolve()
@@ -487,6 +487,7 @@ def build(project, output, font_pak=None, progress=None):
                             raise LocalizerError(tr('У проєкті змінено адресу або оригінал рядка: {0}').format(entry['key']))
                     value = patch_xml(value, grouped[name])
                 if name in fonts:
+                    replaced_fonts.append(canonical(item.filename))
                     value = fonts.pop(name)
                 info = copy.copy(item)
                 info.filename = info.orig_filename = canonical(item.filename)
@@ -509,6 +510,7 @@ def build(project, output, font_pak=None, progress=None):
               'target_language': project.get('target_language', 'uk'),
               'translated_entries': translated, 'total_entries': len(project['entries']),
               'source_pak': str(source), 'font_donor': str(font_source) if font_source else None,
+              'font_assets_replaced': replaced_fonts,
               'installation': tr('Замініть копією створеного PAK однойменний мовний пакет після резервного копіювання. У грі виберіть мову вихідного пакета.'),
               'in_game_verified': False}
     atomic_bytes(str(output) + '.report.json', (json.dumps(report, ensure_ascii=False, indent=2) + '\n').encode())

@@ -940,7 +940,7 @@ class Window(QMainWindow):
         if not path:
             return
         self.busy(lambda: core.build(self.project, path, donor.text() or None),
-                  lambda result: self.show_text(tr('Мовний пакет створено'), tr('{0}\n\nПерекладено: {1} / {2}\n\n{3}\n\nМову пакета та символи перекладу ще потрібно перевірити у грі.').format(result['output'], result['translated_entries'], result['total_entries'], result['installation'])))
+                  lambda result: self.show_text(tr('Мовний пакет створено'), tr('{0}\n\nПерекладено: {1} / {2}\nШрифтових ресурсів замінено: {3}\n\n{4}\n\nНаявність потрібних літер і роботу пакета потрібно перевірити у грі.').format(result['output'], result['translated_entries'], result['total_entries'], len(result['font_assets_replaced']), result['installation'])))
 
     def closeEvent(self, event):
         if self.worker and self.worker.isRunning():

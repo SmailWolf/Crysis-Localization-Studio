@@ -10,7 +10,7 @@
   "Не вдалося зберегти мову перекладу": "Could not save the translation language",
   "Невідома мова перекладу": "Unknown target language",
   "Створюється повна копія базового PAK з перекладеним текстом.\nОзвучення збережеться. Неперекладені рядки залишаться як у базовому пакеті.\nШрифти з іншого мовного PAK можуть краще підтримувати символи перекладу. Перевірте їх у грі.": "A full copy of the source PAK will be created with translated text.\nVoice files will be kept. Untranslated rows will remain as in the source package.\nFonts from another language PAK may better support the translation characters. Check them in the game.",
-  "{0}\n\nПерекладено: {1} / {2}\n\n{3}\n\nМову пакета та символи перекладу ще потрібно перевірити у грі.": "{0}\n\nTranslated: {1} / {2}\n\n{3}\n\nCheck the package language and translation characters in the game.",
+  "{0}\n\nПерекладено: {1} / {2}\nШрифтових ресурсів замінено: {3}\n\n{4}\n\nНаявність потрібних літер і роботу пакета потрібно перевірити у грі.": "{0}\n\nTranslated: {1} / {2}\nFont assets replaced: {3}\n\n{4}\n\nCheck that the required letters display correctly and that the package works in the game.",
   "CryLocal — утиліта локалізації Crysis Remastered": "CryLocal — Crysis Remastered localization utility",
   "CryLocal • локалізація Crysis Remastered": "CryLocal • Crysis Remastered localization",
   "Майстерня перекладу / Crysis Remastered": "Translation workshop / Crysis Remastered",

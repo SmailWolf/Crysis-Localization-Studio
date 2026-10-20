@@ -88,7 +88,8 @@ class CoreTests(unittest.TestCase):
             z.writestr('fonts/ui_font.gfx', 'extended glyph set: Ґ Є І Ї Ў'.encode('utf-8'))
         project = core.new_project(source)
         output = self.root / 'font-built.pak'
-        core.build(project, output, donor)
+        report = core.build(project, output, donor)
+        self.assertEqual(report['font_assets_replaced'], ['fonts/ui_font.gfx'])
         with core.Pak(output) as built:
             self.assertEqual(built.read('fonts/ui_font.gfx'), 'extended glyph set: Ґ Є І Ї Ў'.encode('utf-8'))
 
