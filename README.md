@@ -13,6 +13,6 @@ Crysis Remastered PAK/XML handling was checked against local game files. Crysis 
 
 ## Run
 
-On Linux, install Python 3.10+ and PySide6, then run `./launch.sh`. On Windows, use `Start CryLocal.cmd`; if using the source checkout, follow the PowerShell setup step in [GUIDE.uk.md](GUIDE.uk.md). The TranslateGemma model is downloaded on demand from its configured upstream source and runs locally after download.
+On Linux, install Python 3.10+ and run `./install-linux.sh`, then `./launch.sh`; internet is needed for the initial PySide6 setup. On Windows, use `Start CryLocal.cmd`; if using the source checkout, follow the PowerShell setup step in [GUIDE.uk.md](GUIDE.uk.md). The TranslateGemma model is downloaded on demand from its configured upstream source and runs locally after download.
 
 The project does not currently declare a license for CryLocal. Third-party components retain their own licenses.

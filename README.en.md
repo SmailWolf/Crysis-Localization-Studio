@@ -1,6 +1,6 @@
 # CryLocal — Windows quick start
 
-1. Get the Windows portable package from the repository Releases page when one is available, or install the verified Python/Qt runtime using `windows/setup.ps1`.
+1. Download `CryLocal-0.4.0-Windows-x64.zip` from Releases and extract it fully. For Linux, download `CryLocal-0.4.0-Linux-x64.tar.gz`, extract it, and run `./install-linux.sh` (Python 3.10+ and an internet connection are needed for the first setup).
 2. Run `Start CryLocal.cmd`.
 3. Select English or Ukrainian for the interface. Choose the game profile and create a project from that game's language PAK.
 4. Select a target language. Translate manually with Copy source / Paste translation, or download TranslateGemma 4B and use Translate row / Translate batch.

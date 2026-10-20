@@ -9,5 +9,6 @@ runtime/
 *.gguf
 *.part
 __pycache__/
+.venv/
 *.py[cod]
 *.log
