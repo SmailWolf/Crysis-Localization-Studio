@@ -55,11 +55,14 @@ class GuiTests(unittest.TestCase):
             class FakeTranslator:
                 def translate(self, value):
                     return 'Більше'
-            with patch.object(window, 'translator', return_value=FakeTranslator()):
+            with patch.object(window, 'translator', return_value=FakeTranslator()), \
+                 patch('app.QMessageBox.information') as info:
                 window.translate_one()
                 self.assertTrue(window.worker.wait(5000))
                 self.application.processEvents()
                 self.assertEqual(window.translation.toPlainText(), 'Більше')
+                self.assertEqual(window.project['entries'][1]['translation'], 'Більше')
+                self.assertTrue(info.called)
                 self.assertTrue(window.save())
                 self.assertEqual(core.load_project(path)['entries'][1]['translation'], 'Більше')
                 window.project['entries'][1]['translation'] = ''

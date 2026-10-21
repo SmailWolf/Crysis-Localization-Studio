@@ -38,6 +38,7 @@ LANGUAGE_LABELS = {
     'tr': 'Türkçe', 'uk': 'Українська', 'vi': 'Tiếng Việt', 'zh': '简体中文',
     'zh-TW': '繁體中文',
 }
+ACRONYM = re.compile(r'(?<!\w)[A-Z]{3}(?!\w)')
 
 
 class Translator:
@@ -110,7 +111,20 @@ class Translator:
             marker = f'{prefix}{len(masked_tokens):04d}QXZ'
             masked_tokens.append((marker, match.group()))
             return marker
-        masked = core.TOKEN.sub(mask, source)
+        # Protect game abbreviations such as MHP and SMG just like format tokens.
+        # Merge the matches so neither kind of protected text is translated.
+        matches = sorted((*core.TOKEN.finditer(source), *ACRONYM.finditer(source)),
+                         key=lambda match: match.start())
+        pieces = []
+        cursor = 0
+        for match in matches:
+            if match.start() < cursor:
+                continue
+            pieces.append(source[cursor:match.start()])
+            pieces.append(mask(match))
+            cursor = match.end()
+        pieces.append(source[cursor:])
+        masked = ''.join(pieces)
         prompt = (f'You translate from {source_name} ({source_code}) into {target_name} ({target_code}). '
                   f'Write an accurate, natural {target_name} rendering of the passage. '
                   'Output the translated passage only; omit commentary. '

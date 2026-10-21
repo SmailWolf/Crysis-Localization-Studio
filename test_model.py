@@ -1,10 +1,11 @@
 import hashlib
 import io
+import json
 from pathlib import Path
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import core
 import runtime
@@ -19,6 +20,35 @@ class Response(io.BytesIO):
 
 
 class ModelTests(unittest.TestCase):
+    def test_runtime_selects_gpu_only_or_cpu_layers(self):
+        for backend, expected in [('vulkan', '999'), ('cpu', '0')]:
+            with self.subTest(backend=backend), tempfile.TemporaryDirectory() as tmp:
+                engine = runtime.Runtime(tmp)
+                engine.model.parent.mkdir(parents=True)
+                with engine.model.open('wb') as model:
+                    model.truncate(runtime.MODEL_SIZE)
+                binary = engine.runtime / 'bin' / 'llama-server'
+                binary.parent.mkdir(parents=True)
+                binary.write_bytes(b'')
+                (engine.folder / 'installed.json').write_text(
+                    json.dumps({'backend': backend}), encoding='utf-8')
+                sock = MagicMock()
+                sock.__enter__.return_value = sock
+                sock.bind.return_value = None
+                opener = MagicMock()
+                opener.open.return_value.__enter__.return_value = io.BytesIO(b'{"status":"ok"}')
+                process = MagicMock()
+                process.poll.return_value = None
+                with patch('runtime.socket.socket', return_value=sock), \
+                     patch('runtime.subprocess.Popen', return_value=process) as popen, \
+                     patch('runtime.build_opener', return_value=opener):
+                    engine.start(backend=backend)
+                args = popen.call_args.args[0]
+                self.assertEqual(args[args.index('--n-gpu-layers') + 1], expected)
+                if backend == 'vulkan':
+                    self.assertTrue(engine.installed('vulkan'))
+                engine.stop()
+
     def test_builtin_payload_token_restore_and_cache(self):
         translator = Translator()
         def reply(path, body):
@@ -31,6 +61,23 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(translator.translate('Hello %s!'), 'Привіт %s!')
             self.assertEqual(translator.translate('Hello %s!'), 'Привіт %s!')
             self.assertEqual(mock.call_count, 1)
+
+    def test_three_letter_uppercase_abbreviations_are_preserved(self):
+        translator = Translator()
+        def reply(path, body):
+            prompt = body['prompt']
+            self.assertIn('ZXQPLACEHOLDER0000QXZ', prompt)
+            self.assertIn('ZXQPLACEHOLDER0001QXZ', prompt)
+            self.assertNotIn('MHP', prompt)
+            self.assertNotIn('SMG', prompt)
+            return {'content': 'Підібрати ZXQPLACEHOLDER0000QXZ для ZXQPLACEHOLDER0001QXZ'}
+        with patch.object(translator, 'request', side_effect=reply):
+            self.assertEqual(translator.translate('Find MHP for SMG'), 'Підібрати MHP для SMG')
+
+    def test_three_letter_abbreviation_only_is_preserved_through_model(self):
+        translator = Translator()
+        with patch.object(translator, 'request', return_value={'content': 'ZXQPLACEHOLDER0000QXZ'}):
+            self.assertEqual(translator.translate('SMG'), 'SMG')
 
     def test_reject_changed_placeholder_and_truncation(self):
         translator = Translator()

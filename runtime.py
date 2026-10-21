@@ -27,8 +27,10 @@ MODEL_SHA256 = '81200d03e843d2ec1ece6eeafe7d13cb6e5211e1fcd336ade55790b683a08330
 MODEL_URL = f'https://huggingface.co/{MODEL_REPO}/resolve/{MODEL_REVISION}/{MODEL_NAME}'
 LLAMA_TAG = 'b11756'
 BUILDS = {
-    ('Linux', 'x86_64'): ('llama-b11756-bin-ubuntu-x64.tar.gz', '9def57d9e9b0149979a9ceba40896a4e2bf88c94734069a5567d2f487ceab551', 22240705),
-    ('Windows', 'AMD64'): ('llama-b11756-bin-win-cpu-x64.zip', 'd164195b8f3e92f8fd92bc3a5c0eeaef8707b2f1a979e36360ce8192ebf4fbb3', 23959301),
+    ('Linux', 'x86_64', 'cpu'): ('llama-b11756-bin-ubuntu-x64.tar.gz', '9def57d9e9b0149979a9ceba40896a4e2bf88c94734069a5567d2f487ceab551', 22240705),
+    ('Windows', 'AMD64', 'cpu'): ('llama-b11756-bin-win-cpu-x64.zip', 'd164195b8f3e92f8fd92bc3a5c0eeaef8707b2f1a979e36360ce8192ebf4fbb3', 23959301),
+    ('Linux', 'x86_64', 'vulkan'): ('llama-b11756-bin-ubuntu-vulkan-x64.tar.gz', '7b23a9192e013ee8cf2011c192fd6a6197a41b562ff1b1a8e41f523a933d75cf', 34877974),
+    ('Windows', 'AMD64', 'vulkan'): ('llama-b11756-bin-win-vulkan-x64.zip', '75ce69fdda503c3d6d3b3401f61369bd072194746ec65fbbc5fd7e749edd2914', 36751610),
 }
 
 
@@ -170,6 +172,7 @@ class Runtime:
         self.model = self.folder / 'models' / MODEL_NAME
         self.runtime = self.folder / 'llama.cpp' / LLAMA_TAG
         self.process = None
+        self.running_backend = None
         self.log = None
         self.base_url = None
 
@@ -177,17 +180,27 @@ class Runtime:
         name = 'llama-server.exe' if platform.system() == 'Windows' else 'llama-server'
         return next(self.runtime.rglob(name), None) if self.runtime.exists() else None
 
-    def installed(self):
-        return self.model.is_file() and self.model.stat().st_size == MODEL_SIZE and self.binary() is not None
+    def installed(self, backend=None):
+        if not (self.model.is_file() and self.model.stat().st_size == MODEL_SIZE and self.binary() is not None):
+            return False
+        if backend is None:
+            return True
+        try:
+            metadata = json.loads((self.folder / 'installed.json').read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return backend == 'cpu'  # Upgrade older CPU-only installs without re-downloading the runtime.
+        return metadata.get('backend', 'cpu') == backend
 
-    def install(self, progress=lambda *args: None, cancel=lambda: False):
-        key = (platform.system(), platform.machine())
+    def install(self, progress=lambda *args: None, cancel=lambda: False, backend='cpu'):
+        if backend not in ('cpu', 'vulkan'):
+            raise core.LocalizerError(tr('Невідомий режим прискорення'))
+        key = (platform.system(), platform.machine(), backend)
         if key not in BUILDS:
             raise core.LocalizerError(tr('Автозавантаження доступне для Linux x64 і Windows x64. Можна підключити зовнішній LM Studio / llama.cpp.'))
         asset, digest, size = BUILDS[key]
         archive = self.folder / 'downloads' / asset
         download(f'https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_TAG}/{asset}', archive, digest, size, progress, cancel)
-        if not self.binary():
+        if not self.installed(backend):
             progress(0, 0, tr('Розпакування середовища llama.cpp…'))
             self.runtime.parent.mkdir(parents=True, exist_ok=True)
             temp = Path(tempfile.mkdtemp(prefix='.install-', dir=self.runtime.parent))
@@ -203,15 +216,20 @@ class Runtime:
                 raise core.LocalizerError(tr('У середовищі не знайдено llama-server'))
         download(MODEL_URL, self.model, MODEL_SHA256, MODEL_SIZE, progress, cancel)
         metadata = {'repo': MODEL_REPO, 'revision': MODEL_REVISION, 'filename': MODEL_NAME,
-                    'sha256': MODEL_SHA256, 'bytes': MODEL_SIZE, 'llama_cpp': LLAMA_TAG}
+                    'sha256': MODEL_SHA256, 'bytes': MODEL_SIZE, 'llama_cpp': LLAMA_TAG,
+                    'backend': backend}
         core.atomic_bytes(self.folder / 'installed.json', json.dumps(metadata, indent=2).encode())
         return metadata
 
-    def start(self, progress=lambda *args: None, cancel=lambda: False):
+    def start(self, progress=lambda *args: None, cancel=lambda: False, backend='cpu'):
         if self.process and self.process.poll() is None:
-            return self.base_url
-        if not self.installed():
+            if self.running_backend == backend:
+                return self.base_url
+            self.stop()
+        if not self.model.is_file() or self.model.stat().st_size != MODEL_SIZE:
             raise core.LocalizerError(tr('Спочатку натисніть «Завантажити TranslateGemma 4B»'))
+        if not self.installed(backend):
+            self.install(progress, cancel, backend)
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             port = sock.getsockname()[1]
@@ -230,12 +248,14 @@ class Runtime:
             if qt and qt.origin:
                 search.append(str(Path(qt.origin).parent))
             env['PATH'] = os.pathsep.join(search + [env.get('PATH', '')])
+        gpu_layers = '999' if backend == 'vulkan' else '0'
         args = [str(binary), '--model', str(self.model), '--host', '127.0.0.1', '--port', str(port),
-                '--ctx-size', '4096', '--parallel', '1', '--n-gpu-layers', '0', '--threads', str(min(os.cpu_count() or 4, 8)),
+                '--ctx-size', '4096', '--parallel', '1', '--n-gpu-layers', gpu_layers, '--threads', str(min(os.cpu_count() or 4, 8)),
                 '--no-webui', '--no-warmup', '--alias', 'translategemma-4b']
         flags = subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
         self.process = subprocess.Popen(args, cwd=binary.parent, env=env, stdin=subprocess.DEVNULL,
                                         stdout=self.log, stderr=subprocess.STDOUT, creationflags=flags)
+        self.running_backend = backend
         self.base_url = f'http://127.0.0.1:{port}'
         opener = build_opener(ProxyHandler({}))
         until = time.monotonic() + 180
@@ -267,6 +287,7 @@ class Runtime:
                 self.process.kill()
                 self.process.wait(timeout=3)
         self.process = None
+        self.running_backend = None
         if self.log and not self.log.closed:
             self.log.close()
         self.base_url = None

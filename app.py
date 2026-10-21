@@ -446,12 +446,15 @@ class Window(QMainWindow):
             self.translation.setFocus()
 
     def refresh_model_status(self):
+        backend = (self.project or {}).get('translator', {}).get(
+            'backend', paths.load_preferences().get('translator_backend', 'vulkan'))
+        mode = tr('GPU · Vulkan') if backend == 'vulkan' else tr('CPU')
         if self.engine.process and self.engine.process.poll() is None:
-            self.model_status.setText(tr('TranslateGemma 4B · працює локально'))
-        elif self.engine.installed():
-            self.model_status.setText(tr('TranslateGemma 4B · завантажено'))
+            self.model_status.setText(tr('TranslateGemma 4B · працює локально ({0})').format(mode))
+        elif self.engine.installed(backend):
+            self.model_status.setText(tr('TranslateGemma 4B · завантажено ({0})').format(mode))
         else:
-            self.model_status.setText(tr('TranslateGemma 4B · не завантажено'))
+            self.model_status.setText(tr('TranslateGemma 4B · не завантажено ({0})').format(mode))
 
     def model_task(self, title, action, on_done=None, on_item=None, on_finish=None):
         self.commit()
@@ -482,13 +485,17 @@ class Window(QMainWindow):
         worker.start()
 
     def download_model(self):
+        backend = (self.project or {}).get('translator', {}).get(
+            'backend', paths.load_preferences().get('translator_backend', 'vulkan'))
         self.model_task(tr('Завантаження TranslateGemma 4B · 2,49 ГБ'),
-                        lambda w: self.engine.install(w.report, w.isInterruptionRequested),
+                        lambda w: self.engine.install(w.report, w.isInterruptionRequested, backend),
                         lambda _: QMessageBox.information(self, tr('Модель готова'), tr('TranslateGemma 4B завантажено й перевірено.\nДля перекладу натисніть «Перекласти рядок» або «Перекласти групу».')))
 
     def start_model(self):
+        backend = (self.project or {}).get('translator', {}).get(
+            'backend', paths.load_preferences().get('translator_backend', 'vulkan'))
         self.model_task(tr('Запуск локальної моделі'),
-                        lambda w: self.engine.start(w.report, w.isInterruptionRequested))
+                        lambda w: self.engine.start(w.report, w.isInterruptionRequested, backend))
 
     def stop_model(self):
         self.engine.stop()
@@ -499,16 +506,17 @@ class Window(QMainWindow):
             QMessageBox.information(self, tr('Проєкт'), tr('Спочатку відкрийте проєкт перекладу.'))
             return
         settings = dict(DEFAULTS, **self.project.get('translator', {}))
+        settings.setdefault('backend', paths.load_preferences().get('translator_backend', 'vulkan'))
         dialog = QDialog(self)
         dialog.setWindowTitle('TranslateGemma 4B')
-        dialog.resize(700, 340)
+        dialog.resize(700, 380)
         layout = QVBoxLayout(dialog)
-        note = QLabel(tr('Вбудований режим сам запускає завантажену модель.\nЗовнішній сервер можна використати, якщо модель уже працює в LM Studio чи llama.cpp.'))
+        note = QLabel(tr('Вбудований режим сам запускає завантажену модель. Для GPU потрібен сумісний Vulkan-драйвер і достатньо відеопам’яті; всі шари моделі запускаються на GPU.\nЗовнішній сервер можна використати, якщо модель уже працює в LM Studio чи llama.cpp.'))
         note.setWordWrap(True)
         layout.addWidget(note)
         form = QFormLayout()
         provider = QComboBox()
-        providers = [(tr('Вбудована модель (CPU)'), 'builtin'), ('LM Studio / llama.cpp', 'openai'),
+        providers = [(tr('Вбудована модель'), 'builtin'), ('LM Studio / llama.cpp', 'openai'),
                      ('Ollama', 'ollama'), (tr('Hugging Face / vLLM (структурований шаблон)'), 'hf')]
         for label, value in providers:
             provider.addItem(label, value)
@@ -517,9 +525,14 @@ class Window(QMainWindow):
         for code, name in LANGUAGES.items():
             language.addItem(LANGUAGE_LABELS[code], code)
         language.setCurrentIndex(max(0, language.findData(settings['source_language'])))
+        backend = QComboBox()
+        backend.addItem(tr('GPU · Vulkan (усі шари на GPU)'), 'vulkan')
+        backend.addItem(tr('CPU'), 'cpu')
+        backend.setCurrentIndex(max(0, backend.findData(settings['backend'])))
         address = QLineEdit(settings['base_url'])
         model = QLineEdit(settings['model'])
         form.addRow(tr('Режим'), provider)
+        form.addRow(tr('Прискорення'), backend)
         form.addRow(tr('Мова оригіналу'), language)
         form.addRow(tr('Адреса зовнішнього сервера'), address)
         form.addRow(tr('Назва моделі на сервері'), model)
@@ -527,6 +540,7 @@ class Window(QMainWindow):
             builtin = provider.currentData() == 'builtin'
             address.setEnabled(not builtin)
             model.setEnabled(not builtin)
+            backend.setEnabled(builtin)
             if provider.currentData() == 'openai' and address.text() == DEFAULTS['base_url']:
                 address.setText('http://127.0.0.1:1234')
             if provider.currentData() == 'ollama':
@@ -546,15 +560,20 @@ class Window(QMainWindow):
         layout.addWidget(buttons)
         if dialog.exec() == QDialog.Accepted:
             self.project['translator'] = dict(settings, provider=provider.currentData(),
-                source_language=language.currentData(), base_url=address.text().strip(), model=model.text().strip())
+                source_language=language.currentData(), backend=backend.currentData(),
+                base_url=address.text().strip(), model=model.text().strip())
+            paths.save_preferences({'translator_backend': backend.currentData()})
             self.dirty = True
             self.save()
+            self.refresh_model_status()
 
     def translator(self, worker):
         settings = dict(DEFAULTS, **self.project.get('translator', {}))
+        settings.setdefault('backend', paths.load_preferences().get('translator_backend', 'vulkan'))
         settings['target_language'] = self.project.get('target_language', settings.get('target_language', 'uk'))
         if settings['provider'] == 'builtin':
-            settings['base_url'] = self.engine.start(worker.report, worker.isInterruptionRequested)
+            settings['base_url'] = self.engine.start(worker.report, worker.isInterruptionRequested,
+                                                     settings['backend'])
             settings['model'] = 'translategemma-4b'
         return Translator(settings)
 
@@ -562,7 +581,8 @@ class Window(QMainWindow):
         if self.current is None:
             return
         self.commit()
-        source = self.project['entries'][self.current]['source']
+        row = self.current
+        source = self.project['entries'][row]['source']
         def task(worker):
             translator = self.translator(worker)
             if worker.isInterruptionRequested():
@@ -570,9 +590,21 @@ class Window(QMainWindow):
             worker.report(0, 0, tr('Переклад вибраного рядка…'))
             return translator.translate(source)
         def result(value):
+            entry = self.project['entries'][row]
+            entry['translation'] = value
+            self.dirty = True
+            self.setWindowModified(True)
+            self.editor_dirty = False
+            self.translation.blockSignals(True)
             self.translation.setPlainText(value)
+            self.translation.blockSignals(False)
             self.translation.setFocus()
-            self.statusBar().showMessage(tr('Переклад моделі готовий до редагування. Застосуйте або збережіть його.'), 7000)
+            index = self.model.index(row, 0)
+            self.model.dataChanged.emit(index, self.model.index(row, 3))
+            self.stats()
+            self.statusBar().showMessage(tr('Переклад рядка завершено. Результат одразу відображено.'), 7000)
+            QMessageBox.information(self, tr('Переклад готовий'),
+                                    tr('Переклад рядка завершено. Результат одразу відображено та внесено до проєкту.'))
         self.model_task(tr('Переклад рядка'), task, result)
 
     def translate_batch(self):
